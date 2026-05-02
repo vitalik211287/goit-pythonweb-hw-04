@@ -8,7 +8,7 @@ from pathlib import Path
 def configure_logging():
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s.%(msecs)03d %(module)5s:%(lineno)-3d %(levelname)-5s - %(message)s",
+        format="%(asctime)s.%(msecs)03d %(module)5s:%(lineno)-3d %(levelname)-7s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
