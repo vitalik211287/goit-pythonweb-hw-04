@@ -1,104 +1,77 @@
-# import argparse
-# import asyncio
-# import logging
-# import shutil
-# from pathlib import Path
-
-# parser = argparse.ArgumentParser(description="Sort files by extension")
-# parser.add_argument('source', help='Path to source folder')
-# parser.add_argument('destination', help='Path to destination folder')
-# args = parser.parse_args()
-
-
-# source = Path(args.source)
-# destination = Path(args.destination )
-
-# for path in source.iterdir():
-#     if path.is_file():
-#         folder_name = path.suffix[1:] if path.suffix else "no_extension"
-#         target_dir = destination / folder_name
-
-#         target_dir.mkdir(exist_ok=True)
-#         shutil.copy(path, target_dir / path.name)
-#         print(target_dir.name)
-
 import argparse
+import asyncio
+import logging
 import shutil
 from pathlib import Path
 
 
-parser = argparse.ArgumentParser(description="Sort files by extension")
-parser.add_argument("source", help="Path to source folder")
-parser.add_argument("destination", help="Path to destination folder")
-args = parser.parse_args()
+def configure_logging():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s.%(msecs)03d %(module)s:%(lineno)d %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-source = Path(args.source)
-destination = Path(args.destination)
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Sort files by extension")
+    parser.add_argument("source", help="Path to source folder")
+    parser.add_argument("destination", help="Path to destination folder")
+    return parser.parse_args()
 
 
-# def read_folder(source):
-#     if not source.exists() or not source.is_dir():
-#         print("Source folder does not exist or is not a directory")
-#         exit()
-
-#     result = []  # список
-
-#     for path in source.rglob("*"):
-#         if path.is_file():
-#             folder_name = path.suffix[1:] if path.suffix else "no_extension"
-#             result.append(folder_name)  
-
-#     return result
-
-def read_folder(source):
+async def read_folder(source: Path):
     if not source.exists() or not source.is_dir():
-        print("Source folder does not exist or is not a directory")
-        exit()
+        raise ValueError("Source folder does not exist or is not a directory")
 
-    result = []
-
-    for path in source.rglob("*"):
-        if path.is_file():
-            folder_name = path.suffix[1:] if path.suffix else "no_extension"
-            result.append((path, folder_name))  # 🔥 кортеж
-
-    return result
-
-# def create_folder(destination, result):
-#     created_dirs = []
-#     for folder_name in result:
-#         target_dir = destination / folder_name
-#         target_dir.mkdir(parents=True, exist_ok=True)
-#         created_dirs.append(target_dir)
-#     return created_dirs
-
-def create_folder(destination, result):
-    created_dirs = {}
-
-    for _, folder_name in result:
-        target_dir = destination / folder_name
-        target_dir.mkdir(parents=True, exist_ok=True)
-        created_dirs[folder_name] = target_dir
-
-    return created_dirs
-
-# def copy_file(target_dir, path):
-#     shutil.copy2(path, target_dir / path.name)
-#     print(f"Copied: {path.name} -> {target_dir}")
-
-# def copy_file(files, folders):
-#     for path, folder_name in files:
-#         target_dir = folders[folder_name]
-#         shutil.copy2(path, target_dir / path.name)
-#         print(f"Copied: {path.name} -> {target_dir}")
+    return await asyncio.to_thread(
+        lambda: [path for path in source.rglob("*") if path.is_file()]
+    )
 
 
-# if __name__ == "__main__":
-#     folder_names = read_folder(source)
-#     create_folder(destination, folder_names)
-#     # copy_file(source_folder, destination)   
+async def create_folder(destination: Path, file_path: Path):
+    folder_name = file_path.suffix[1:] if file_path.suffix else "no_extension"
+    target_dir = destination / folder_name
+
+    await asyncio.to_thread(target_dir.mkdir, parents=True, exist_ok=True)
+
+    return target_dir
+
+
+async def copy_file(file_path: Path, target_dir: Path):
+    await asyncio.to_thread(shutil.copy2, file_path, target_dir / file_path.name)
+    logging.info(f"Copied: {file_path.name} -> {target_dir}")
+
+
+async def process_file(file_path: Path, destination: Path):
+    try:
+        target_dir = await create_folder(destination, file_path)
+        await copy_file(file_path, target_dir)
+    except Exception as error:
+        logging.error(f"Error processing {file_path}: {error}")
+
+
+async def main():
+    args = parse_args()
+
+    source = Path(args.source)
+    destination = Path(args.destination)
+
+    logging.info(f"Start processing: {source} -> {destination}")
+
+    try:
+        files = await read_folder(source)
+        logging.info(f"Found {len(files)} files")
+
+        tasks = [process_file(file_path, destination) for file_path in files]
+        await asyncio.gather(*tasks)
+
+        logging.info("Processing finished")
+
+    except Exception as error:
+        logging.error(error)
+
 
 if __name__ == "__main__":
-    files = read_folder(source)
-    folders = create_folder(destination, files)
-    # copy_file(files, folders)
+    configure_logging()
+    asyncio.run(main())
